@@ -5,6 +5,12 @@ from django.conf import settings
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
+from subscribe.models import Subscribers
+
 
 ISSUE_STATUS_CHOICES = (
     ('active', u'Активный'),
@@ -199,3 +205,22 @@ class Item(models.Model):
     class Meta:
         verbose_name = u'Новость'
         verbose_name_plural = u'Новости'
+
+
+
+@receiver(post_save, sender=Issue)
+def send_email(sender, instance, **kwargs):
+
+    emails = Subscribers.objects.all().values_list('useremail', flat=True)
+    obj = Issue.objects.get(id=instance.id)
+
+    if (instance.status == 'active'):
+        items = obj.item_set.filter(status='active').order_by('-section__priority', '-priority')
+        contex_dict = {'obj_list': items,}
+        html_content = render_to_string('issue_email.html', contex_dict)
+        text_content = strip_tags(html_content)
+        # maybe need use send_mass_mail
+        send_mail(instance.title, text_content,
+            "Python Digest <example@example.com>", emails)
+    #NOTE
+    # create html for email list
